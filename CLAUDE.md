@@ -1,0 +1,229 @@
+# CLAUDE.md - Strict Development Guidelines
+
+This file contains mandatory instructions for Claude AI agents working on this crypto tax application. **ALL WORK MUST STRICTLY ADHERE TO THESE GUIDELINES.**
+
+## MANDATORY REFERENCE DOCUMENTS
+
+Before writing ANY code, implementing ANY feature, or making ANY architectural decisions, you MUST:
+
+1. **Read and follow** `/docs/implementation-plan.md` - The complete project specification and architecture
+2. **Adhere strictly to** `/docs/code-notes.md` - Coding patterns, security requirements, and best practices
+3. **Implement TDD as specified in** `/docs/testing-notes.md` - 100% test coverage is NON-NEGOTIABLE
+4. **Follow QA processes from** `/docs/qa-notes.md` - Quality gates and validation requirements
+
+## CRITICAL RULES - NO EXCEPTIONS
+
+### 1. Test-Driven Development (TDD)
+- **RED-GREEN-REFACTOR**: Write failing tests FIRST, then minimal code to pass, then refactor
+- **100% TEST COVERAGE**: Every line of code must be tested. CI blocks any PR below 100% coverage
+- **NO CODE WITHOUT TESTS**: Never write production code without a failing test first
+- **Test order**: Unit tests → Integration tests → E2E tests
+
+### 2. Architecture Compliance
+- **Monorepo structure**: `/backend`, `/frontend`, `/shared`, `/docs` as specified
+- **Blockchain adapters**: Must implement `IBlockchainAdapter` interface
+- **Dependency injection**: Use tsyringe or similar for testability
+- **Config-driven**: All RPC URLs, API keys from environment/config files
+- **MCP integration**: Follow schema-based tool registration pattern
+
+### 3. Security Requirements (ZERO TOLERANCE)
+- **NO PRIVATE KEYS STORED**: Ever, anywhere, under any circumstances
+- **Encrypt sensitive data**: Wallet addresses, transaction data in database
+- **Parameterized queries**: Always use Prisma or equivalent - no raw SQL
+- **Input validation**: Joi/Zod schemas for all API endpoints
+- **HTTPS only**: All communications must be encrypted
+- **Rate limiting**: All public endpoints must have rate limits
+
+### 4. Code Quality Standards
+- **TypeScript only**: Strong typing required for all code
+- **ESLint/Prettier**: Follow configured rules - 2-space indent, single quotes, semicolons
+- **Error handling**: All async operations must have try/catch with proper logging
+- **Retry logic**: Use exponential backoff for transient failures (RPC, API calls)
+- **Logging**: Use Winston with structured logging (timestamp, userId, operation)
+
+### 5. Blockchain Integration Standards
+- **SDK versions**: Pin exact versions as specified in implementation plan
+- **Solana specifics**:
+  - Use `@solana/web3.js` for core functionality
+  - Integrate `@jup-ag/instruction-parser` for Jupiter swaps
+  - Use `@raydium-io/raydium-sdk` for Raydium AMM transactions
+  - Check program IDs before parsing (Jupiter: `JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4`)
+- **Ethereum**: Use Ethers.js v6+, not Web3.js
+- **Bitcoin**: bitcoinjs-lib v6+ with external APIs for transaction history
+- **Error handling**: Retry RPC failures, handle rate limits gracefully
+
+## DEVELOPMENT WORKFLOW - MANDATORY STEPS
+
+### Before Starting ANY Task:
+1. **Create TodoList**: Use TodoWrite tool to plan all tasks with specific, actionable items
+2. **Review docs**: Confirm understanding of requirements from reference documents
+3. **Write tests first**: Create failing tests that define expected behavior
+4. **Implement minimally**: Write just enough code to make tests pass
+5. **Refactor safely**: Improve code while keeping tests green
+
+### For Each Feature Implementation:
+1. **Unit tests**: Test business logic in isolation with mocks
+2. **Integration tests**: Test API endpoints and database operations
+3. **Component tests**: Test React components with React Testing Library
+4. **E2E tests**: Test complete user workflows with Cypress
+5. **Manual QA**: Follow qa-notes.md checklist before marking complete
+
+### Before Any Commit:
+1. **Run full test suite**: `npm test` must pass with 100% coverage
+2. **Run linting**: `npm run lint` and `npm run typecheck` must pass
+3. **Security check**: No sensitive data, proper input validation
+4. **Update documentation**: JSDoc comments, README updates if needed
+
+## AI-SPECIFIC INTEGRATION REQUIREMENTS
+
+### OpenAI/MCP Integration:
+- **Backend only**: No AI API calls from frontend for security
+- **Template prompts**: Use Handlebars or similar for consistent prompting
+- **MCP tools**: Define as JSON schemas in configuration files
+- **Error handling**: Graceful degradation when AI services unavailable
+- **User consent**: Always show AI suggestions to users for approval
+
+### Transaction Healing Process:
+1. **Parse first**: Use blockchain-specific parsers before AI analysis
+2. **Multi-source consensus**: Minimum 3 price sources for validation
+3. **Confidence scoring**: AI must provide confidence levels for suggestions
+4. **User approval**: Interactive workflow with user confirmation required
+5. **Audit trail**: Log all AI decisions and user approvals
+
+## DATABASE AND PERFORMANCE STANDARDS
+
+### Database Operations:
+- **Prisma transactions**: Use for atomicity when modifying related data
+- **User data isolation**: All queries MUST filter by userId
+- **Indexing**: Proper indexes on frequently queried fields
+- **Migrations**: Never modify existing migrations, create new ones
+- **Seeding**: Maintain seed scripts for development and testing
+
+### Performance Requirements:
+- **API response times**: <500ms for standard operations
+- **Sync performance**: 1000 transactions within 30 seconds
+- **Report generation**: 10,000 transactions within 10 seconds
+- **Caching**: Use Redis for frequently accessed data (1hr TTL for prices)
+- **Queue processing**: BullMQ for heavy operations (sync, healing)
+
+## SUBSCRIPTION AND PAYMENT REQUIREMENTS
+
+### Crypto Payment Implementation:
+- **Direct wallet payments**: SOL/BTC only, no intermediaries
+- **Unique addresses**: Generate per-payment addresses for tracking
+- **On-chain verification**: Minimum confirmations (1 for BTC, finality for Solana)
+- **Payment watchers**: Use WebSocket subscriptions for real-time updates
+- **Auto-upgrade**: Activate features immediately upon payment confirmation
+
+### Subscription Tiers:
+- **Basic**: Free tier with limitations (1 chain, basic reports)
+- **Pro**: $50 equivalent (all chains, AI healing, advanced features)
+- **Enterprise**: $200 equivalent (custom features, priority support)
+
+## ERROR CONDITIONS AND HANDLING
+
+### Blockchain Integration Failures:
+- **RPC timeouts**: Retry with exponential backoff, fallback to alternative providers
+- **Rate limiting**: Queue requests, implement proper delays
+- **Invalid transactions**: Log and skip, don't break entire sync process
+- **Network congestion**: Graceful degradation with user notifications
+
+### AI Service Failures:
+- **API unavailable**: Disable AI features, allow manual data entry
+- **Low confidence**: Require user confirmation, provide manual override
+- **Parsing errors**: Fall back to manual categorization workflow
+- **Cost management**: Implement usage limits and monitoring
+
+## TESTING REQUIREMENTS - MANDATORY COVERAGE
+
+### Unit Tests (100% Required):
+- **Business logic**: Cost basis calculations, gain/loss computations
+- **Utilities**: Date handling, currency conversions, validation functions
+- **Adapters**: Blockchain integration logic with mocked SDKs
+- **Services**: AI integration, payment processing, user management
+
+### Integration Tests (Required):
+- **API endpoints**: All routes with various input combinations
+- **Database operations**: CRUD operations with proper error handling
+- **Authentication**: Token generation, validation, expiration
+- **Queue processing**: Background job execution and error handling
+
+### E2E Tests (Critical Paths):
+- **User registration/login**: Account creation and authentication flow
+- **Wallet management**: Adding, syncing, removing wallets
+- **Tax calculations**: Complete workflow from sync to report generation
+- **Payment flow**: Subscription upgrade via crypto payments
+- **AI healing**: Transaction data correction workflow
+
+## DEPLOYMENT AND MONITORING
+
+### Production Readiness:
+- **Environment variables**: All secrets in environment, not code
+- **Docker containers**: Multi-stage builds for optimization
+- **Health checks**: Endpoint for monitoring service status
+- **Logging**: Structured logs with proper levels and context
+- **Error tracking**: Sentry or equivalent for error monitoring
+
+### Performance Monitoring:
+- **Database queries**: Monitor slow queries and optimize
+- **API metrics**: Track response times, error rates, throughput
+- **Background jobs**: Monitor queue length, processing times, failures
+- **User analytics**: Track feature usage and error patterns
+
+## COMPLIANCE AND LEGAL
+
+### Tax Compliance:
+- **Disclaimers**: Prominent "not tax advice" disclaimers throughout UI
+- **Data accuracy**: Best-effort only, user responsible for verification
+- **Export formats**: Standard CSV/PDF formats compatible with tax software
+- **Record keeping**: Maintain transaction history for audit trails
+
+### Privacy and Security:
+- **Data encryption**: All PII encrypted at rest and in transit
+- **Access controls**: Role-based permissions, principle of least privilege
+- **Audit logging**: Track all data access and modifications
+- **GDPR compliance**: If applicable, implement data portability/deletion
+
+## FAILURE CONDITIONS - WHAT TO DO
+
+### If Tests Fail:
+1. **STOP IMMEDIATELY**: Do not proceed with implementation
+2. **Fix tests first**: Ensure all tests pass before continuing
+3. **Check coverage**: Verify 100% coverage is maintained
+4. **Review implementation**: Ensure code follows specified patterns
+
+### If Security Issues Found:
+1. **HALT DEVELOPMENT**: Security takes absolute priority
+2. **Fix immediately**: Address security issues before any other work
+3. **Review thoroughly**: Check for similar issues throughout codebase
+4. **Document fix**: Update security practices if needed
+
+### If Performance Issues:
+1. **Profile and measure**: Use proper profiling tools to identify bottlenecks
+2. **Optimize systematically**: Address highest impact issues first
+3. **Verify improvements**: Measure before and after performance
+4. **Update benchmarks**: Ensure performance requirements are met
+
+## COMMUNICATION AND DOCUMENTATION
+
+### Code Documentation:
+- **JSDoc comments**: Required for all public methods and classes
+- **Inline comments**: For complex business logic only, prefer self-documenting code
+- **API documentation**: Swagger/OpenAPI specs for all endpoints
+- **Architecture decisions**: Document significant choices in ADR format
+
+### User-Facing Documentation:
+- **README files**: Clear setup and usage instructions
+- **API guides**: Examples for common operations
+- **Troubleshooting**: Common issues and solutions
+- **Changelog**: Track all significant changes and breaking changes
+
+## FINAL REMINDER
+
+**EVERY DECISION, EVERY LINE OF CODE, EVERY TEST MUST ALIGN WITH THESE GUIDELINES.**
+
+If you encounter any situation not covered by these guidelines, refer to the implementation plan and ask for clarification rather than making assumptions. The success of this project depends on strict adherence to these standards.
+
+**WHEN IN DOUBT, OVER-ENGINEER FOR SECURITY AND UNDER-ENGINEER FOR FEATURES.**
+
+Remember: This is a financial application handling sensitive data. There is no room for shortcuts, assumptions, or "good enough" implementations.
