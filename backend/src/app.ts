@@ -2,6 +2,8 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { z } from 'zod';
+import { AuthService } from './auth/auth.service';
+import { authenticateToken } from './auth/auth.middleware';
 
 // Types for error handling
 interface AppError extends Error {
@@ -106,8 +108,14 @@ export async function createApp(): Promise<Express> {
 
     // Handle operational errors
     if (error.isOperational) {
+      const errorName = error.name && error.name !== 'Error' ? error.name :
+        error.statusCode === 401 ? 'Unauthorized' :
+        error.statusCode === 404 ? 'Not Found' :
+        error.statusCode === 409 ? 'Conflict' :
+        'Operational Error';
+
       return res.status(error.statusCode || 500).json({
-        error: error.name || 'Operational Error',
+        error: errorName,
         message: error.message,
       });
     }
@@ -124,22 +132,76 @@ export async function createApp(): Promise<Express> {
   return app;
 }
 
-// Placeholder route creators (to be implemented)
+// Auth router with full implementation
 function createAuthRouter() {
   const router = express.Router();
+  const authService = new AuthService();
 
-  // POST /api/auth/register - for testing validation
-  router.post('/register', (req: Request, res: Response, next: NextFunction) => {
+  // Registration endpoint
+  router.post('/register', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const registerSchema = z.object({
         email: z.string().email('Invalid email format'),
         password: z.string().min(8, 'Password must be at least 8 characters'),
       });
 
-      registerSchema.parse(req.body);
+      const validatedData = registerSchema.parse(req.body);
+      const result = await authService.register(validatedData);
 
-      // For now, just return success (actual implementation will come later)
-      res.status(201).json({ message: 'User registered successfully' });
+      res.status(201).json(result);
+    } catch (error: any) {
+      if (error.message === 'User with this email already exists') {
+        const conflictError = new Error(error.message) as AppError;
+        conflictError.statusCode = 409;
+        conflictError.isOperational = true;
+        conflictError.name = 'Conflict';
+        return next(conflictError);
+      }
+      next(error);
+    }
+  });
+
+  // Login endpoint
+  router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const loginSchema = z.object({
+        email: z.string().email('Invalid email format'),
+        password: z.string().min(8, 'Password must be at least 8 characters'),
+      });
+
+      const validatedData = loginSchema.parse(req.body);
+      const result = await authService.login(validatedData);
+
+      res.status(200).json(result);
+    } catch (error: any) {
+      if (error.message === 'Invalid credentials') {
+        const authError = new Error(error.message) as AppError;
+        authError.statusCode = 401;
+        authError.isOperational = true;
+        authError.name = 'Unauthorized';
+        return next(authError);
+      }
+      next(error);
+    }
+  });
+
+  // Profile endpoint (protected)
+  router.get('/profile', authenticateToken, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = await authService.getUserById(req.user!.userId);
+      if (!user) {
+        const notFoundError = new Error('User not found') as AppError;
+        notFoundError.statusCode = 404;
+        notFoundError.isOperational = true;
+        return next(notFoundError);
+      }
+
+      res.status(200).json({
+        user: {
+          id: user.id,
+          email: user.email,
+        },
+      });
     } catch (error) {
       next(error);
     }
@@ -149,7 +211,25 @@ function createAuthRouter() {
 }
 
 function createWalletsRouter() {
-  return express.Router();
+  const router = express.Router();
+
+  // All wallet routes require authentication
+  router.use(authenticateToken);
+
+  // GET /api/wallets - Get user's wallets
+  router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      // For now, return empty array (actual implementation will come later)
+      res.status(200).json({
+        wallets: [],
+        message: 'Wallets retrieved successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  return router;
 }
 
 function createTransactionsRouter() {
