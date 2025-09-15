@@ -35,6 +35,7 @@
     "@prisma/client": "^5.7.0",
     "@raydium-io/raydium-sdk-v2": "^0.2.26-alpha",
     "@solana/web3.js": "^1.98.4",
+    "axios": "^1.12.2",
     "bcryptjs": "^2.4.3",
     "bip32": "^4.0.0",
     "bitcoinjs-lib": "^6.1.7",
