@@ -39,11 +39,11 @@ describe.skip('EthereumAdapter - Real Blockchain Integration', () => {
         tokenSymbol: 'ETH',
         decimals: 18,
       });
-      expect(balances[0].balance).toBeDefined();
-      expect(typeof balances[0].balance).toBe('string');
+      expect(balances[0]?.balance).toBeDefined();
+      expect(typeof balances[0]?.balance).toBe('string');
 
       // Balance should be a valid number string
-      expect(() => BigInt(balances[0].balance)).not.toThrow();
+      expect(() => BigInt(balances[0]?.balance || '0')).not.toThrow();
     }, 30000);
 
     it('should get USDT balance for real wallet', async () => {
@@ -62,8 +62,8 @@ describe.skip('EthereumAdapter - Real Blockchain Integration', () => {
         tokenAddress: usdtAddress,
         decimals: 6, // USDT has 6 decimals
       });
-      expect(balances[0].balance).toBeDefined();
-      expect(typeof balances[0].balance).toBe('string');
+      expect(balances[0]?.balance).toBeDefined();
+      expect(typeof balances[0]?.balance).toBe('string');
     }, 30000);
   });
 
@@ -96,14 +96,14 @@ describe.skip('EthereumAdapter - Real Blockchain Integration', () => {
         expect(tx).toHaveProperty('status');
 
         // Verify data types
-        expect(typeof tx.hash).toBe('string');
-        expect(tx.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
-        expect(typeof tx.from).toBe('string');
-        expect(tx.from.toLowerCase()).toBe(tx.from); // Should be lowercase
-        expect(typeof tx.timestamp).toBe('number');
-        expect(tx.timestamp).toBeGreaterThan(0);
-        expect(typeof tx.value).toBe('string');
-        expect(['success', 'failed', 'pending']).toContain(tx.status);
+        expect(typeof tx?.hash).toBe('string');
+        expect(tx?.hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+        expect(typeof tx?.from).toBe('string');
+        expect(tx?.from.toLowerCase()).toBe(tx?.from); // Should be lowercase
+        expect(typeof tx?.timestamp).toBe('number');
+        expect(tx?.timestamp).toBeGreaterThan(0);
+        expect(typeof tx?.value).toBe('string');
+        expect(['success', 'failed', 'pending']).toContain(tx?.status);
 
         // Parse the transaction
         const parsed = await adapter.parseTransaction(tx);
