@@ -84,38 +84,60 @@ export class EthereumAdapter implements IBlockchainAdapter {
       const transferTopic = ethers.id('Transfer(address,address,uint256)');
       const addressTopic = ethers.zeroPadValue(address.toLowerCase(), 32);
 
-      // Retry logic for rate limiting
-      let logs;
-      let retries = 0;
-      const maxRetries = 3;
+      // Handle block range limits (most RPCs limit to 1000-2000 blocks per query)
+      const MAX_BLOCK_RANGE = 1000;
+      let logs: any[] = [];
 
-      while (retries < maxRetries) {
-        try {
-          // Get logs where address is the sender
-          logs = await this.provider.getLogs({
-            fromBlock,
-            toBlock,
-            topics: [transferTopic, addressTopic] as any,
-          });
+      // Calculate block ranges to query
+      const startBlock = typeof fromBlock === 'string' ? 0 : fromBlock;
+      const endBlock = typeof toBlock === 'string' ? await this.provider.getBlockNumber() : toBlock;
 
-          // Get logs where address is the receiver
-          const logsTo = await this.provider.getLogs({
-            fromBlock,
-            toBlock,
-            topics: [transferTopic, null, addressTopic] as any,
-          });
+      // Process in chunks if range is too large
+      for (let currentFrom = startBlock; currentFrom <= endBlock; currentFrom += MAX_BLOCK_RANGE) {
+        const currentTo = Math.min(currentFrom + MAX_BLOCK_RANGE - 1, endBlock);
 
-          logs = [...logs, ...logsTo];
-          break;
-        } catch (error: any) {
-          if (error.message?.includes('rate limit')) {
-            retries++;
-            if (retries >= maxRetries) {
-              throw new RateLimitError(this.chain);
+        // Retry logic for rate limiting
+        let retries = 0;
+        const maxRetries = 3;
+
+        while (retries < maxRetries) {
+          try {
+            // Get logs where address is the sender
+            const senderLogs = await this.provider.getLogs({
+              fromBlock: currentFrom,
+              toBlock: currentTo,
+              topics: [transferTopic, addressTopic] as any,
+            });
+
+            // Get logs where address is the receiver
+            const receiverLogs = await this.provider.getLogs({
+              fromBlock: currentFrom,
+              toBlock: currentTo,
+              topics: [transferTopic, null, addressTopic] as any,
+            });
+
+            // Ensure logs are arrays before spreading
+            const senderLogsArray = Array.isArray(senderLogs) ? senderLogs : [];
+            const receiverLogsArray = Array.isArray(receiverLogs) ? receiverLogs : [];
+            logs = [...logs, ...senderLogsArray, ...receiverLogsArray];
+            break;
+          } catch (error: any) {
+            if (error.message?.includes('rate limit')) {
+              retries++;
+              if (retries >= maxRetries) {
+                throw new RateLimitError(this.chain);
+              }
+              await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+            } else if (error.message?.includes('range is too large')) {
+              // If still too large, break it down further
+              throw new NetworkError(
+                this.chain,
+                'Block range too large. Please use smaller ranges.',
+                error
+              );
+            } else {
+              throw error;
             }
-            await new Promise(resolve => setTimeout(resolve, 1000 * retries));
-          } else {
-            throw error;
           }
         }
       }
@@ -178,22 +200,30 @@ export class EthereumAdapter implements IBlockchainAdapter {
     // Check if it's an ERC20 transfer
     if (rawTx.rawData?.logs?.length > 0) {
       const transferTopic = ethers.id('Transfer(address,address,uint256)');
-      const transferLog = rawTx.rawData.logs.find(
-        (log: any) => log.topics?.[0] === transferTopic
-      );
+      const transferLog = rawTx.rawData.logs.find((log: any) => log.topics?.[0] === transferTopic);
 
       if (transferLog) {
         tokenSymbol = 'ERC20'; // Would need token metadata lookup in production
         tokenAddress = rawTx.to;
         // Decode the amount from log data
-        amount = ethers.toBigInt(transferLog.data).toString();
+        if (transferLog.data) {
+          try {
+            // Convert hex string to BigInt
+            amount = BigInt(transferLog.data).toString();
+          } catch (e) {
+            // If parsing fails, use the raw value
+            amount = '0';
+          }
+        }
       }
     }
 
     // Detect swap transactions (simplified - would need more complex logic)
-    if (rawTx.rawData?.logs?.filter((log: any) =>
-      log.topics?.[0] === ethers.id('Transfer(address,address,uint256)')
-    ).length > 1) {
+    if (
+      rawTx.rawData?.logs?.filter(
+        (log: any) => log.topics?.[0] === ethers.id('Transfer(address,address,uint256)')
+      ).length > 1
+    ) {
       type = TransactionType.SWAP;
     }
 
@@ -272,10 +302,10 @@ export class EthereumAdapter implements IBlockchainAdapter {
         balances.push({
           address,
           chain: this.chain,
-          tokenSymbol: symbol,
+          tokenSymbol: symbol.toString(),
           tokenAddress,
           balance: balance.toString(),
-          decimals,
+          decimals: Number(decimals),
         });
       } catch (error: any) {
         throw new NetworkError(this.chain, `Failed to get token balance: ${error.message}`, error);

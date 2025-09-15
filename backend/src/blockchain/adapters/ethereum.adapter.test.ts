@@ -11,6 +11,7 @@ describe('EthereumAdapter', () => {
   let mockProvider: jest.Mocked<ethers.JsonRpcProvider>;
 
   beforeEach(() => {
+    jest.clearAllMocks();
     adapter = new EthereumAdapter();
     mockProvider = {
       getBlockNumber: jest.fn(),
@@ -21,7 +22,9 @@ describe('EthereumAdapter', () => {
       getLogs: jest.fn(),
     } as any;
 
-    (ethers.JsonRpcProvider as jest.MockedClass<typeof ethers.JsonRpcProvider>).mockImplementation(() => mockProvider);
+    (ethers.JsonRpcProvider as jest.MockedClass<typeof ethers.JsonRpcProvider>).mockImplementation(
+      () => mockProvider
+    );
   });
 
   describe('initialization', () => {
@@ -105,21 +108,25 @@ describe('EthereumAdapter', () => {
         hash: '0x123',
         from: address,
         to: '0xRecipient',
-        value: ethers.parseEther('1.0'),
-        gasPrice: ethers.parseUnits('20', 'gwei'),
+        value: BigInt('1000000000000000000'), // 1 ETH
+        gasPrice: BigInt('20000000000'), // 20 gwei
         blockNumber: 18000000,
       };
 
       const mockReceipt = {
         status: 1,
         gasUsed: BigInt(21000),
-        effectiveGasPrice: ethers.parseUnits('20', 'gwei'),
+        logs: [],
       };
 
-      mockProvider.getLogs.mockResolvedValue(mockLogs as any);
+      // Mock getLogs to be called twice (sender and receiver)
+      mockProvider.getLogs
+        .mockResolvedValueOnce(mockLogs as any) // Sender logs
+        .mockResolvedValueOnce([] as any); // Receiver logs (empty for this test)
       mockProvider.getBlock.mockResolvedValue(mockBlock as any);
       mockProvider.getTransaction.mockResolvedValue(mockTx as any);
       mockProvider.getTransactionReceipt.mockResolvedValue(mockReceipt as any);
+      mockProvider.getBlockNumber.mockResolvedValue(18001000);
 
       const transactions = await adapter.getTransactions(address, {
         fromBlock: 17999000,
@@ -137,14 +144,22 @@ describe('EthereumAdapter', () => {
     it('should handle rate limiting with retry', async () => {
       const address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1';
 
-      mockProvider.getLogs
-        .mockRejectedValueOnce(new Error('rate limit exceeded'))
-        .mockResolvedValueOnce([]);
+      // Mock getBlockNumber for the default 'latest' case
+      mockProvider.getBlockNumber.mockResolvedValue(999);
 
-      const transactions = await adapter.getTransactions(address);
+      mockProvider.getLogs
+        .mockRejectedValueOnce(new Error('rate limit exceeded')) // First attempt fails
+        .mockResolvedValueOnce([] as any) // Retry for sender logs succeeds
+        .mockResolvedValueOnce([] as any); // Receiver logs succeeds
+
+      // Use a block range that fits in one chunk (0-999 is exactly 1000 blocks)
+      const transactions = await adapter.getTransactions(address, {
+        fromBlock: 0,
+        toBlock: 999,
+      });
 
       expect(transactions).toEqual([]);
-      expect(mockProvider.getLogs).toHaveBeenCalledTimes(2);
+      expect(mockProvider.getLogs).toHaveBeenCalledTimes(3); // Once for rate limit, twice for retry (sender + receiver)
     });
   });
 
@@ -189,14 +204,16 @@ describe('EthereumAdapter', () => {
         fee: '420000000000000',
         status: 'success' as const,
         rawData: {
-          logs: [{
-            topics: [
-              ethers.id('Transfer(address,address,uint256)'),
-              ethers.zeroPadValue('0xSender', 32),
-              ethers.zeroPadValue('0xRecipient', 32),
-            ],
-            data: ethers.zeroPadValue(ethers.toBeHex(1000000), 32), // 1 USDT (6 decimals)
-          }],
+          logs: [
+            {
+              topics: [
+                ethers.id('Transfer(address,address,uint256)'),
+                ethers.zeroPadValue('0xSender', 32),
+                ethers.zeroPadValue('0xRecipient', 32),
+              ],
+              data: '0x00000000000000000000000000000000000000000000000000000000000f4240', // 1 USDT (1000000 in hex)
+            },
+          ],
         },
       };
 
@@ -220,7 +237,7 @@ describe('EthereumAdapter', () => {
 
     it('should get ETH balance for address', async () => {
       const address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1';
-      mockProvider.getBalance.mockResolvedValue(ethers.parseEther('10.5'));
+      mockProvider.getBalance.mockResolvedValue(BigInt('10500000000000000000')); // 10.5 ETH in wei
 
       const balances = await adapter.getBalance(address);
 
@@ -238,12 +255,27 @@ describe('EthereumAdapter', () => {
       const address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1';
       const tokenAddress = '0xdAC17F958D2ee523a2206206994597C13D831ec7'; // USDT
 
-      // Mock ERC20 contract calls would go here
-      // For brevity, we'll skip the implementation details
+      // Mock the Contract constructor and its methods
+      const mockContract = {
+        balanceOf: jest.fn(() => Promise.resolve(BigInt('1000000'))), // 1 USDT (6 decimals)
+        decimals: jest.fn(() => Promise.resolve(6)),
+        symbol: jest.fn(() => Promise.resolve('USDT')),
+      };
+
+      // Override ethers.Contract to return our mock
+      jest.spyOn(ethers, 'Contract').mockImplementation(() => mockContract as any);
 
       const balances = await adapter.getBalance(address, tokenAddress);
 
-      expect(balances).toBeDefined();
+      expect(balances).toHaveLength(1);
+      expect(balances[0]).toMatchObject({
+        address,
+        chain: ChainType.ETHEREUM,
+        tokenSymbol: 'USDT',
+        tokenAddress,
+        balance: '1000000',
+        decimals: 6,
+      });
     });
   });
 
@@ -272,13 +304,14 @@ describe('EthereumAdapter', () => {
         hash,
         from: '0xSender',
         to: '0xRecipient',
-        value: ethers.parseEther('1.0'),
+        value: BigInt('1000000000000000000'), // 1 ETH
+        gasPrice: BigInt('20000000000'), // 20 gwei
         blockNumber: 18000000,
       };
       const mockReceipt = {
         status: 1,
         gasUsed: BigInt(21000),
-        effectiveGasPrice: ethers.parseUnits('20', 'gwei'),
+        logs: [],
       };
       const mockBlock = {
         timestamp: Math.floor(Date.now() / 1000),
