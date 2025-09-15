@@ -1,0 +1,160 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Plans/Subscriptions
+model Plan {
+  id                   String   @id
+  name                 String   // BASIC, PRO, ENTERPRISE
+  monthlyPriceUSD      Float
+  features             String[] // Array of feature strings
+  chainLimit           Int?     // null means unlimited
+  transactionLimit     Int?     // null means unlimited
+  hasAIHealing         Boolean  @default(false)
+  hasAdvancedReports   Boolean  @default(false)
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  // Relations
+  users User[]
+
+  @@map("plans")
+}
+
+// Users
+model User {
+  id               String   @id
+  email            String   @unique
+  passwordHash     String   @map("password_hash")
+  planId           String   @map("plan_id")
+  twoFactorEnabled Boolean  @default(false) @map("two_factor_enabled")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  plan    Plan     @relation(fields: [planId], references: [id])
+  wallets Wallet[]
+
+  @@map("users")
+}
+
+// Wallets
+model Wallet {
+  id           String    @id
+  userId       String    @map("user_id")
+  address      String    // Encrypted wallet address
+  chain        String    // ethereum, solana, bitcoin, sui
+  label        String?   // User-defined label
+  isActive     Boolean   @default(true) @map("is_active")
+  lastSyncedAt DateTime? @map("last_synced_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([chain])
+  @@map("wallets")
+}
+
+// Transactions
+model Transaction {
+  id                 String   @id
+  walletId           String   @map("wallet_id")
+  hash               String   // Transaction hash/signature
+  chain              String   // ethereum, solana, bitcoin, sui
+  type               String   // buy, sell, swap, transfer, airdrop, reward, fee
+  tokenSymbol        String   @map("token_symbol")
+  tokenAddress       String?  @map("token_address")
+  amount             String   // Stored as string for precision
+  priceUSD           Float?   @map("price_usd")
+  feeAmount          String?  @map("fee_amount")
+  feeTokenSymbol     String?  @map("fee_token_symbol")
+  timestamp          DateTime
+  blockNumber        Int?     @map("block_number")
+  isHealed           Boolean  @default(false) @map("is_healed")
+  healingConfidence  Float?   @map("healing_confidence") // 0.0 to 1.0
+  metadata           Json     @default("{}")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([chain])
+  @@index([hash])
+  @@index([timestamp])
+  @@index([type])
+  @@map("transactions")
+}
+
+// Payment Invoices for Crypto Subscriptions
+model PaymentInvoice {
+  id             String   @id
+  planType       String   @map("plan_type") // BASIC, PRO, ENTERPRISE
+  cryptocurrency String   // SOL, BTC
+  amount         String   // Amount in crypto (as string for precision)
+  address        String   // Payment address
+  qrCode         String   @map("qr_code") // Base64 encoded QR code
+  expiresAt      DateTime @map("expires_at")
+  status         String   @default("pending") // pending, confirmed, expired, failed
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([expiresAt])
+  @@map("payment_invoices")
+}
+
+// Cost Basis Entries for Tax Calculations
+model CostBasisEntry {
+  id               String   @id
+  userId           String   @map("user_id")
+  transactionId    String   @map("transaction_id")
+  tokenSymbol      String   @map("token_symbol")
+  amount           String   // Amount (as string for precision)
+  costBasisUSD     Float    @map("cost_basis_usd")
+  acquisitionDate  DateTime @map("acquisition_date")
+  method           String   // FIFO, LIFO
+  taxYear          Int      @map("tax_year")
+  isDisposed       Boolean  @default(false) @map("is_disposed")
+  disposalTxnId    String?  @map("disposal_txn_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([transactionId])
+  @@index([taxYear])
+  @@index([tokenSymbol])
+  @@map("cost_basis_entries")
+}
+
+// Tax Reports
+model TaxReport {
+  id              String   @id
+  userId          String   @map("user_id")
+  taxYear         Int      @map("tax_year")
+  method          String   // FIFO, LIFO
+  totalGainUSD    Float    @map("total_gain_usd")
+  totalLossUSD    Float    @map("total_loss_usd")
+  netGainLossUSD  Float    @map("net_gain_loss_usd")
+  reportData      Json     @map("report_data") // Detailed report data
+  generatedAt     DateTime @default(now()) @map("generated_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([taxYear])
+  @@map("tax_reports")
+}
