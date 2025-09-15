@@ -1,0 +1,75 @@
+{
+  "name": "crypto-tax-app",
+  "version": "1.0.0",
+  "description": "A minimal viable crypto tax application focused on precise gain/loss calculations with AI-driven transaction data healing and multi-blockchain support.",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend",
+    "shared"
+  ],
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "test": "turbo test",
+    "test:unit": "turbo test:unit",
+    "test:integration": "turbo test:integration",
+    "test:e2e": "turbo test:e2e",
+    "test:coverage": "turbo test:coverage",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "clean": "turbo clean",
+    "prepare": "husky"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tonycodes/crypto-tax-app.git"
+  },
+  "keywords": [
+    "crypto",
+    "tax",
+    "blockchain",
+    "solana",
+    "ethereum",
+    "bitcoin",
+    "defi",
+    "ai",
+    "typescript"
+  ],
+  "author": "Tony",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tonycodes/crypto-tax-app/issues"
+  },
+  "homepage": "https://github.com/tonycodes/crypto-tax-app#readme",
+  "devDependencies": {
+    "turbo": "^2.5.6",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "packageManager": "npm@10.2.4",
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  }
+}
