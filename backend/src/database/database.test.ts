@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import { PrismaClient } from '@prisma/client';
+
+// Mock uuid to avoid ES module issues
+let uuidCounter = 0;
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => `mock-uuid-${++uuidCounter}`),
+}));
+
 import { v4 as uuidv4 } from 'uuid';
 
 const prisma = new PrismaClient();

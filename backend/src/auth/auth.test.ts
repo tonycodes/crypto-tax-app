@@ -24,10 +24,19 @@ describe('Authentication', () => {
     // Clear all users after each test to prevent conflicts
     await prisma.user.deleteMany();
 
-    // Ensure basic plan exists
+    // Ensure basic plan exists (use upsert to handle conflicts from other tests)
     await prisma.plan.upsert({
       where: { id: 'basic' },
-      update: {},
+      update: {
+        name: 'BASIC',
+        monthlyPriceUSD: 0,
+        features: ['1 blockchain', '100 transactions/month', 'Basic reports'],
+        chainLimit: 1,
+        transactionLimit: 100,
+        hasAIHealing: false,
+        hasAdvancedReports: false,
+        isActive: true,
+      },
       create: {
         id: 'basic',
         name: 'BASIC',
