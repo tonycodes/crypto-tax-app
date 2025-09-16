@@ -7,6 +7,7 @@ module.exports = {
   transform: {
     '^.+\\.ts$': 'ts-jest',
   },
+  transformIgnorePatterns: ['node_modules/(?!uuid)'],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',
@@ -24,9 +25,8 @@ module.exports = {
       statements: 100,
     },
   },
-  setupFilesAfterEnv: [
-    '<rootDir>/src/test-setup.ts'
-  ],
+  setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
+  setupFiles: ['<rootDir>/src/test-env.ts'],
   testPathIgnorePatterns: [
     '<rootDir>/node_modules/',
     '<rootDir>/src/database/prisma.test.ts', // Skip database tests for now

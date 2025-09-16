@@ -34,10 +34,22 @@ export function formatTokenAmount(
   symbol: string,
   displayDecimals?: number
 ): string {
-  const numAmount = Number(amount) / Math.pow(10, decimals);
+  const raw = BigInt(amount || '0');
   const precision = displayDecimals ?? decimals;
-  const formatted = numAmount.toFixed(precision);
-  return `${formatted} ${symbol}`;
+  const divisor = 10n ** BigInt(decimals);
+  const scaleFactor = 10n ** BigInt(precision);
+
+  if (precision === 0) {
+    const rounded = (raw + divisor / 2n) / divisor;
+    return `${rounded.toString()} ${symbol}`;
+  }
+
+  const rounded = (raw * scaleFactor + divisor / 2n) / divisor;
+  const whole = rounded / scaleFactor;
+  const fraction = rounded % scaleFactor;
+  const fractionStr = fraction.toString().padStart(precision, '0');
+
+  return `${whole.toString()}.${fractionStr} ${symbol}`;
 }
 
 /**
@@ -54,13 +66,11 @@ export function isValidWalletAddress(address: string, chain: ChainType): boolean
       // Simple validation - in production would use proper Base58 validation
       return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
 
-    case 'bitcoin':
-      // Bitcoin addresses: Multiple formats (Legacy, SegWit, Bech32)
-      // Legacy: starts with 1 or 3
-      // SegWit: starts with bc1
+    case 'bitcoin': {
       const legacyRegex = /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/;
       const bech32Regex = /^bc1[a-z0-9]{39,59}$/;
       return legacyRegex.test(address) || bech32Regex.test(address);
+    }
 
     case 'sui':
       // Sui addresses: 0x followed by 64 hex characters
@@ -78,15 +88,15 @@ export function calculateTaxYear(date: Date, jurisdiction: string = 'US'): numbe
   const year = date.getFullYear();
 
   switch (jurisdiction.toUpperCase()) {
-    case 'UK':
-      // UK tax year runs from April 6 to April 5
-      const ukTaxYearStart = new Date(year, 3, 6); // April 6 (month is 0-indexed)
+    case 'UK': {
+      const ukTaxYearStart = new Date(year, 3, 6);
       return date >= ukTaxYearStart ? year : year - 1;
+    }
 
-    case 'AU':
-      // Australia tax year runs from July 1 to June 30
-      const auTaxYearStart = new Date(year, 6, 1); // July 1
+    case 'AU': {
+      const auTaxYearStart = new Date(year, 6, 1);
       return date >= auTaxYearStart ? year : year - 1;
+    }
 
     case 'US':
     default:
@@ -100,21 +110,25 @@ export function calculateTaxYear(date: Date, jurisdiction: string = 'US'): numbe
  */
 export function formatDate(date: Date, format: 'iso' | 'us' | 'readable' = 'iso'): string {
   switch (format) {
-    case 'iso':
-      return date.toISOString().split('T')[0]!; // YYYY-MM-DD
+    case 'iso': {
+      const [isoDate] = date.toISOString().split('T');
+      return isoDate ?? '';
+    }
 
     case 'us':
-      return date.toLocaleDateString('en-US'); // MM/DD/YYYY
+      return date.toLocaleDateString('en-US');
 
     case 'readable':
       return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
-      }); // Month DD, YYYY
+      });
 
-    default:
-      return date.toISOString().split('T')[0]!;
+    default: {
+      const [defaultDate] = date.toISOString().split('T');
+      return defaultDate ?? '';
+    }
   }
 }
 
@@ -199,5 +213,5 @@ export async function retryWithBackoff<T>(
     }
   }
 
-  throw lastError!;
+  throw lastError ?? new Error('Unknown error');
 }

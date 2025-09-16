@@ -21,18 +21,23 @@ The app remains minimal, with all other aspects unchanged.
 ## Tech Stack
 
 ### Frontend
+
 React 18+ (Vite for build), Tailwind CSS 3+ (for clean, responsive UI: simple dashboard, modals for interactive fixes, progress bars via WebSockets).
 
 ### Backend
+
 Node.js/Express.js (REST API + WebSockets for progress), BullMQ/Redis for async jobs (e.g., blockchain syncs, AI heals).
 
 ### Database
-PostgreSQL (structured txns/users; schemas for chains), Prisma ORM for migrations/queries.
+
+MySQL 8+ (structured txns/users; JSON columns for metadata), Prisma ORM for migrations/queries.
 
 ### Auth
+
 JWT (bcrypt for passwords), Clerk/Auth0 for simplicity (but self-implemented for crypto subs).
 
 ### Blockchain SDKs
+
 Due diligence: Selected based on popularity, maintenance, JS/TS support, community in 2025; official/recommended for reliability; decoupled via adapters:
 
 - **Ethereum**: Ethers.js (v6+; preferred over Web3.js for lighter footprint, better TypeScript, direct contract/tx interactions; active, audited).
@@ -43,23 +48,29 @@ Due diligence: Selected based on popularity, maintenance, JS/TS support, communi
 **Modularity**: Abstract via interfaces (e.g., `IBlockchainAdapter`); plugins for new chains (e.g., Polygon via config). For Solana, adapters check txn program IDs (e.g., Jupiter: `JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4`; Raydium: `675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Nd5`); invoke parsers only when matched. RPC via MCPs (e.g., QuickNode for ETH/Solana/BTC in one dashboard) for dynamic endpoints—config file (e.g., `rpcProviders: { solana: 'https://api.quicknode.com/solana/mainnet' }`) allows swapping without code changes.
 
 ### AI Integration
+
 OpenAI API (GPT-4o) or Grok API for cost basis (e.g., infer from tx patterns) and healing (web search via SerpAPI/Bing, consensus via multiple sources). Backend-only for security. Integrate MCP (via official JS library, e.g., `@anthropic/mcp` or equivalent from GitHub) to expose internal/external services as "tools" (e.g., RPC queries, price APIs) that AI can call dynamically during prompts.
 
 ### Payments
+
 Solana Web3.js + BTC lib for on-chain confirmations (watch our wallets via APIs like Helius for Solana, Blockcypher for BTC).
 
 ### Testing
+
 Jest/Vitest (unit/integration), Cypress (E2E), Supertest (API); aim 100% coverage via TDD.
 
 ### Docs
+
 JSDoc/Swagger for API; Markdown in repo (README, wikis); auto-gen via TypeDoc.
 
 ### Other
+
 Docker for env, GitHub Actions CI/CD, ESLint/Prettier. MCP server setup (e.g., lightweight Express endpoint for AI callbacks).
 
 ## High-Level Architecture
 
 ### Monorepo Structure
+
 Turborepo: `/backend`, `/frontend`, `/shared` (types/utils), `/docs`.
 
 ### Data Flow
@@ -75,12 +86,15 @@ Turborepo: `/backend`, `/frontend`, `/shared` (types/utils), `/docs`.
 9. **Subs**: 3 tiers (Basic: 1 chain, Pro: All + AI heal, Enterprise: Custom); on signup, generate QR/invoice for crypto pay; poll chain for confirmation, auto-upgrade.
 
 ### MCP Usage
+
 Implement MCP gateway in backend (e.g., `/mcp/tools` endpoint); AI API calls include MCP config for tool access. This enables dynamism: Add new services (e.g., new chain RPC) by registering them as MCP tools in config, not code. Parsers/SDks remain for core, but AI can bypass via MCP for edges.
 
 ### Decoupling
+
 Blockchain adapters in `/adapters/`; easy plug (e.g., new ChainX: implement interface, add to config). Adapters remain pluggable; add parser hooks via interfaces (e.g., `parseTxn(txn: Transaction): ParsedData`). MCP enhances: Tools as JSON schemas in config; AI selects based on context, minimizing code for expansions.
 
 ### Scalability
+
 Async jobs for heavy lifts (e.g., full wallet sync); cache prices in Redis.
 
 ## Features Breakdown
@@ -211,7 +225,7 @@ if (isJupiterTxn(txn)) {
 ### Phase 8: Deployment & Monitoring (Week 10+)
 
 - Dockerize; CI/CD: Tests → Build → Deploy.
-- Monitoring: Sentry for errors; Postgres backups.
+- Monitoring: Sentry for errors; MySQL backups.
 - Launch: Beta with sample wallets.
 
 ## Risks & Mitigations

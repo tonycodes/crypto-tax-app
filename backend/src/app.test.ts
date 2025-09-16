@@ -12,9 +12,7 @@ describe('App', () => {
 
   describe('Basic API', () => {
     it('should respond with 200 on health check', async () => {
-      const response = await request(app)
-        .get('/health')
-        .expect(200);
+      const response = await request(app).get('/health').expect(200);
 
       expect(response.body).toMatchObject({
         status: 'healthy',
@@ -24,9 +22,7 @@ describe('App', () => {
     });
 
     it('should return 404 for unknown routes', async () => {
-      const response = await request(app)
-        .get('/unknown-route')
-        .expect(404);
+      const response = await request(app).get('/unknown-route').expect(404);
 
       expect(response.body).toMatchObject({
         error: 'Not Found',
@@ -36,9 +32,7 @@ describe('App', () => {
     });
 
     it('should have security headers', async () => {
-      const response = await request(app)
-        .get('/health')
-        .expect(200);
+      const response = await request(app).get('/health').expect(200);
 
       expect(response.headers).toMatchObject({
         'x-content-type-options': 'nosniff',
@@ -76,9 +70,7 @@ describe('App', () => {
 
     it('should handle internal server errors', async () => {
       // This will be implemented when we have routes that can error
-      const response = await request(app)
-        .get('/api/test-error')
-        .expect(500);
+      const response = await request(app).get('/api/test-error').expect(500);
 
       expect(response.body).toMatchObject({
         error: 'Internal Server Error',

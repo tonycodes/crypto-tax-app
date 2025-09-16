@@ -8,7 +8,7 @@ describe('Database Schema Tests', () => {
     prisma = new PrismaClient({
       datasources: {
         db: {
-          url: process.env['DATABASE_URL'] || 'postgresql://test:test@localhost:5432/crypto_tax_test',
+          url: process.env['DATABASE_URL'] || 'mysql://app:password@127.0.0.1:3307/crypto_tax_test',
         },
       },
     });
@@ -330,7 +330,7 @@ describe('Database Schema Tests', () => {
         type: 'sell',
         tokenSymbol: 'SOL',
         amount: '500000000',
-        priceUSD: 95.50,
+        priceUSD: 95.5,
         timestamp: new Date('2024-01-02T12:00:00Z'),
         isHealed: true,
         healingConfidence: 0.95,

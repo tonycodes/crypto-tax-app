@@ -14,6 +14,7 @@ export interface CreateUserRequest {
 export interface LoginRequest {
   email: string;
   password: string;
+  twoFactorToken?: string;
 }
 
 export interface AuthResponse {
@@ -21,6 +22,7 @@ export interface AuthResponse {
   user: {
     id: string;
     email: string;
+    twoFactorEnabled: boolean;
   };
   token: string;
 }
@@ -34,6 +36,7 @@ export interface JWTPayload {
 
 // Extend Express Request type globally for TypeScript
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: {

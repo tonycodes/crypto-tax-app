@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -15,7 +15,7 @@ model Plan {
   id                   String   @id
   name                 String   // BASIC, PRO, ENTERPRISE
   monthlyPriceUSD      Float
-  features             String[] // Array of feature strings
+  features             Json     // Stored as JSON array of feature strings
   chainLimit           Int?     // null means unlimited
   transactionLimit     Int?     // null means unlimited
   hasAIHealing         Boolean  @default(false)
@@ -37,6 +37,7 @@ model User {
   passwordHash     String   @map("password_hash")
   planId           String   @map("plan_id")
   twoFactorEnabled Boolean  @default(false) @map("two_factor_enabled")
+  twoFactorSecret  String?  @map("two_factor_secret")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
@@ -85,7 +86,7 @@ model Transaction {
   blockNumber        Int?     @map("block_number")
   isHealed           Boolean  @default(false) @map("is_healed")
   healingConfidence  Float?   @map("healing_confidence") // 0.0 to 1.0
-  metadata           Json     @default("{}")
+  metadata           Json?    // Optional transaction metadata payload
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 

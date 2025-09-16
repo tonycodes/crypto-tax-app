@@ -1,22 +1,45 @@
 import request from 'supertest';
-import { describe, it, expect, beforeAll, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import { createApp } from '../app';
 import { Express } from 'express';
 import jwt from 'jsonwebtoken';
-import { AuthService } from './auth.service';
+import { PrismaClient } from '@prisma/client';
+import { generateTotp } from './totp.util';
 
 describe('Authentication', () => {
   let app: Express;
-  let authService: AuthService;
+  let prisma: PrismaClient;
 
   beforeAll(async () => {
     app = await createApp();
-    authService = new AuthService();
+    prisma = new PrismaClient();
+    await prisma.$connect();
   });
 
-  afterEach(() => {
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  beforeEach(async () => {
     // Clear all users after each test to prevent conflicts
-    authService.clearUsers();
+    await prisma.user.deleteMany();
+
+    // Ensure basic plan exists
+    await prisma.plan.upsert({
+      where: { id: 'basic' },
+      update: {},
+      create: {
+        id: 'basic',
+        name: 'BASIC',
+        monthlyPriceUSD: 0,
+        features: ['1 blockchain', '100 transactions/month', 'Basic reports'],
+        chainLimit: 1,
+        transactionLimit: 100,
+        hasAIHealing: false,
+        hasAdvancedReports: false,
+        isActive: true,
+      },
+    });
   });
 
   describe('POST /api/auth/register', () => {
@@ -26,24 +49,21 @@ describe('Authentication', () => {
         password: 'securePassword123',
       };
 
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send(userData)
-        .expect(201);
+      const response = await request(app).post('/api/auth/register').send(userData).expect(201);
 
       expect(response.body).toMatchObject({
-        message: 'User registered successfully',
-        user: {
-          id: expect.any(String),
-          email: 'test@example.com',
-        },
-        token: expect.any(String),
+        id: expect.any(String),
+        email: 'test@example.com',
+        planId: 'basic',
+        twoFactorEnabled: false,
       });
 
-      // Verify JWT token is valid
-      const decoded = jwt.verify(response.body.token, process.env['JWT_SECRET']!) as any;
-      expect(decoded.userId).toBe(response.body.user.id);
-      expect(decoded.email).toBe('test@example.com');
+      // Verify user was created in database
+      const user = await prisma.user.findUnique({
+        where: { email: 'test@example.com' },
+      });
+      expect(user).toBeTruthy();
+      expect(user?.email).toBe('test@example.com');
     });
 
     it('should reject registration with invalid email', async () => {
@@ -52,10 +72,7 @@ describe('Authentication', () => {
         password: 'securePassword123',
       };
 
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send(userData)
-        .expect(400);
+      const response = await request(app).post('/api/auth/register').send(userData).expect(400);
 
       expect(response.body).toMatchObject({
         error: 'Validation Error',
@@ -74,10 +91,7 @@ describe('Authentication', () => {
         password: '123',
       };
 
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send(userData)
-        .expect(400);
+      const response = await request(app).post('/api/auth/register').send(userData).expect(400);
 
       expect(response.body).toMatchObject({
         error: 'Validation Error',
@@ -97,20 +111,14 @@ describe('Authentication', () => {
       };
 
       // First registration should succeed
-      await request(app)
-        .post('/api/auth/register')
-        .send(userData)
-        .expect(201);
+      await request(app).post('/api/auth/register').send(userData).expect(201);
 
       // Second registration with same email should fail
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send(userData)
-        .expect(409);
+      const response = await request(app).post('/api/auth/register').send(userData).expect(409);
 
       expect(response.body).toMatchObject({
         error: 'Conflict',
-        message: 'User with this email already exists',
+        message: 'Email already registered',
       });
     });
   });
@@ -123,9 +131,7 @@ describe('Authentication', () => {
 
     beforeEach(async () => {
       // Register a test user before each login test
-      await request(app)
-        .post('/api/auth/register')
-        .send(testUser);
+      await request(app).post('/api/auth/register').send(testUser);
     });
 
     it('should login with valid credentials', async () => {
@@ -138,16 +144,20 @@ describe('Authentication', () => {
         .expect(200);
 
       expect(response.body).toMatchObject({
-        message: 'Login successful',
         user: {
           id: expect.any(String),
           email: testUser.email,
+          planId: 'basic',
+          twoFactorEnabled: false,
         },
         token: expect.any(String),
       });
 
       // Verify JWT token is valid
-      const decoded = jwt.verify(response.body.token, process.env['JWT_SECRET']!) as any;
+      const decoded = jwt.verify(
+        response.body.token,
+        process.env['JWT_SECRET'] || 'default_secret_change_in_production'
+      ) as any;
       expect(decoded.userId).toBe(response.body.user.id);
       expect(decoded.email).toBe(testUser.email);
     });
@@ -163,7 +173,7 @@ describe('Authentication', () => {
 
       expect(response.body).toMatchObject({
         error: 'Unauthorized',
-        message: 'Invalid credentials',
+        message: 'Invalid email or password',
       });
     });
 
@@ -172,13 +182,13 @@ describe('Authentication', () => {
         .post('/api/auth/login')
         .send({
           email: 'nonexistent@example.com',
-          password: 'anyPassword',
+          password: 'anyPassword123',
         })
         .expect(401);
 
       expect(response.body).toMatchObject({
         error: 'Unauthorized',
-        message: 'Invalid credentials',
+        message: 'Invalid email or password',
       });
     });
 
@@ -198,21 +208,86 @@ describe('Authentication', () => {
     });
   });
 
+  describe('Two-factor authentication flow', () => {
+    const userData = {
+      email: '2fa-user@example.com',
+      password: 'SecurePassword123',
+    };
+
+    let authToken: string;
+    let sharedSecret: string;
+
+    beforeEach(async () => {
+      await request(app).post('/api/auth/register').send(userData).expect(201);
+
+      const loginResponse = await request(app).post('/api/auth/login').send(userData).expect(200);
+
+      authToken = loginResponse.body.token;
+    });
+
+    it('enables 2FA and requires tokens on subsequent login', async () => {
+      const setupResponse = await request(app)
+        .post('/api/auth/twofactor/setup')
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      expect(setupResponse.body).toMatchObject({
+        secret: expect.any(String),
+        otpauthUrl: expect.stringContaining('otpauth://totp/CryptoTax:'),
+      });
+
+      sharedSecret = setupResponse.body.secret;
+
+      const verifyResponse = await request(app)
+        .post('/api/auth/twofactor/verify')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ token: generateTotp(sharedSecret) })
+        .expect(200);
+
+      expect(verifyResponse.body).toEqual({ success: true });
+
+      await request(app)
+        .post('/api/auth/login')
+        .send(userData)
+        .expect(401)
+        .expect(res => {
+          expect(res.body).toMatchObject({
+            error: 'Unauthorized',
+            message: 'Two-factor authentication token is required',
+          });
+        });
+
+      const loginWithTotp = await request(app)
+        .post('/api/auth/login')
+        .send({ ...userData, twoFactorToken: generateTotp(sharedSecret) })
+        .expect(200);
+
+      expect(loginWithTotp.body.user).toMatchObject({
+        email: userData.email,
+        twoFactorEnabled: true,
+      });
+    });
+  });
+
   describe('JWT Token Authentication', () => {
     let userToken: string;
     let userId: string;
 
     beforeEach(async () => {
       // Register and get a token for protected route tests
-      const registerResponse = await request(app)
-        .post('/api/auth/register')
-        .send({
-          email: 'jwt-test@example.com',
-          password: 'securePassword123',
-        });
+      await request(app).post('/api/auth/register').send({
+        email: 'jwt-test@example.com',
+        password: 'securePassword123',
+      });
 
-      userToken = registerResponse.body.token;
-      userId = registerResponse.body.user.id;
+      // Login to get token
+      const loginResponse = await request(app).post('/api/auth/login').send({
+        email: 'jwt-test@example.com',
+        password: 'securePassword123',
+      });
+
+      userToken = loginResponse.body.token;
+      userId = loginResponse.body.user.id;
     });
 
     it('should access protected route with valid token', async () => {
@@ -230,9 +305,7 @@ describe('Authentication', () => {
     });
 
     it('should reject access to protected route without token', async () => {
-      const response = await request(app)
-        .get('/api/auth/profile')
-        .expect(401);
+      const response = await request(app).get('/api/auth/profile').expect(401);
 
       expect(response.body).toMatchObject({
         error: 'Unauthorized',
@@ -248,15 +321,15 @@ describe('Authentication', () => {
 
       expect(response.body).toMatchObject({
         error: 'Unauthorized',
-        message: 'Invalid or expired token',
+        message: 'Invalid token',
       });
     });
 
     it('should reject access with expired token', async () => {
       // Create an expired token (1 second expiry in the past)
       const expiredToken = jwt.sign(
-        { userId, email: 'jwt-test@example.com' },
-        process.env['JWT_SECRET']!,
+        { userId, email: 'jwt-test@example.com', planId: 'basic' },
+        process.env['JWT_SECRET'] || 'default_secret_change_in_production',
         { expiresIn: '-1s' }
       );
 
@@ -267,7 +340,7 @@ describe('Authentication', () => {
 
       expect(response.body).toMatchObject({
         error: 'Unauthorized',
-        message: 'Invalid or expired token',
+        message: 'Token expired',
       });
     });
   });
@@ -279,20 +352,20 @@ describe('Authentication', () => {
         password: 'testPassword123',
       };
 
-      await request(app)
-        .post('/api/auth/register')
-        .send(userData)
-        .expect(201);
+      await request(app).post('/api/auth/register').send(userData).expect(201);
 
       // The stored password should be hashed, not plain text
-      // This test assumes we can access the user service or database
-      // For now, we verify the login works with the original password
-      const loginResponse = await request(app)
-        .post('/api/auth/login')
-        .send(userData)
-        .expect(200);
+      // Verify the login works with the original password
+      const loginResponse = await request(app).post('/api/auth/login').send(userData).expect(200);
 
       expect(loginResponse.body.token).toBeDefined();
+
+      // Verify password is actually hashed in database
+      const user = await prisma.user.findUnique({
+        where: { email: userData.email },
+      });
+      expect(user?.passwordHash).not.toBe(userData.password);
+      expect(user?.passwordHash).toMatch(/^\$2[aby]\$\d{2}\$/); // bcrypt hash pattern
     });
   });
 
@@ -300,14 +373,17 @@ describe('Authentication', () => {
     let userToken: string;
 
     beforeEach(async () => {
-      const registerResponse = await request(app)
-        .post('/api/auth/register')
-        .send({
-          email: 'middleware-test@example.com',
-          password: 'securePassword123',
-        });
+      await request(app).post('/api/auth/register').send({
+        email: 'middleware-test@example.com',
+        password: 'securePassword123',
+      });
 
-      userToken = registerResponse.body.token;
+      const loginResponse = await request(app).post('/api/auth/login').send({
+        email: 'middleware-test@example.com',
+        password: 'securePassword123',
+      });
+
+      userToken = loginResponse.body.token;
     });
 
     it('should allow access to protected routes with valid token', async () => {
@@ -321,9 +397,7 @@ describe('Authentication', () => {
     });
 
     it('should reject access to protected routes without proper authorization', async () => {
-      const response = await request(app)
-        .get('/api/wallets')
-        .expect(401);
+      const response = await request(app).get('/api/wallets').expect(401);
 
       expect(response.body).toMatchObject({
         error: 'Unauthorized',
