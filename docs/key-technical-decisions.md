@@ -386,23 +386,23 @@ interface IBlockchainAdapter {
 
 ## 🗄️ Database Decisions
 
-### 1. PostgreSQL for Primary Database
+### 1. MySQL for Primary Database
 
-**Decision**: Use PostgreSQL instead of MongoDB/MySQL
-**Date**: Phase 1 (Design)
+**Decision**: Standardize on MySQL instead of PostgreSQL
+**Date**: Phase 1 (Revised)
 **Rationale**:
 
-- ACID compliance for financial data
-- Excellent JSON support for metadata
-- Strong TypeScript/Prisma integration
-- Mature ecosystem and tooling
+- ACID guarantees with wide operational familiarity
+- Native JSON column support for metadata payloads
+- Broad managed-service availability (PlanetScale, RDS, AlloyDB for MySQL)
+- Smooth Prisma integration with connection pooling support
 
 **Implications**:
 
-- ✅ Data integrity guarantees
-- ✅ Complex query capabilities
-- ✅ JSON flexibility where needed
-- ⚠️ More complex than NoSQL for some use cases
+- ✅ Keeps financial data strongly consistent
+- ✅ Easier hand-off to DevOps teams already supporting MySQL
+- ✅ JSON columns cover metadata needs without separate services
+- ⚠️ Requires workarounds for features like array columns (handled via JSON)
 
 ### 2. Prisma ORM
 
@@ -421,7 +421,7 @@ interface IBlockchainAdapter {
 - ✅ Excellent developer experience
 - ✅ Automated migration generation
 - ⚠️ Learning curve for complex queries
-- ⚠️ Some advanced PostgreSQL features not supported
+- ⚠️ Some advanced MySQL-specific tuning (e.g., generated columns) require manual migrations
 
 ## 📝 Documentation Decisions
 

@@ -108,16 +108,10 @@ export interface IBlockchainAdapter {
   getCurrentBlockNumber(): Promise<number>;
 
   // Subscribe to new transactions (optional, for real-time updates)
-  subscribeToAddress?(
-    address: string,
-    callback: (tx: RawTransaction) => void
-  ): () => void;
+  subscribeToAddress?(address: string, callback: (tx: RawTransaction) => void): () => void;
 
   // Get historical price for a token at a specific time
-  getHistoricalPrice?(
-    tokenAddress: string,
-    timestamp: Date
-  ): Promise<number | null>;
+  getHistoricalPrice?(tokenAddress: string, timestamp: Date): Promise<number | null>;
 }
 
 // Factory for creating blockchain adapters
@@ -151,23 +145,14 @@ export class RateLimitError extends BlockchainError {
 
 export class InvalidAddressError extends BlockchainError {
   constructor(chain: ChainType, address: string) {
-    super(
-      `Invalid ${chain} address: ${address}`,
-      chain,
-      'INVALID_ADDRESS'
-    );
+    super(`Invalid ${chain} address: ${address}`, chain, 'INVALID_ADDRESS');
     this.name = 'InvalidAddressError';
   }
 }
 
 export class NetworkError extends BlockchainError {
   constructor(chain: ChainType, message: string, originalError?: any) {
-    super(
-      `Network error on ${chain}: ${message}`,
-      chain,
-      'NETWORK_ERROR',
-      originalError
-    );
+    super(`Network error on ${chain}: ${message}`, chain, 'NETWORK_ERROR', originalError);
     this.name = 'NetworkError';
   }
 }

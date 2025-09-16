@@ -1,14 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from './auth.service';
+import { PrismaClient } from '@prisma/client';
+import { AuthError } from './auth.errors';
 
-const authService = new AuthService();
+const prisma = new PrismaClient();
+const authService = new AuthService(prisma);
 
 export interface AppError extends Error {
   statusCode?: number;
   isOperational?: boolean;
 }
 
-export const authenticateToken = (req: Request, _res: Response, next: NextFunction): void => {
+export const authenticateToken = async (
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): Promise<void> => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
 
@@ -20,16 +27,24 @@ export const authenticateToken = (req: Request, _res: Response, next: NextFuncti
   }
 
   try {
-    const decoded = authService.verifyToken(token);
+    const decoded = await authService.verifyToken(token);
     req.user = {
       userId: decoded.userId,
       email: decoded.email,
     };
     next();
   } catch (error) {
-    const authError = new Error('Invalid or expired token') as AppError;
-    authError.statusCode = 401;
-    authError.isOperational = true;
-    next(authError);
+    if (error instanceof AuthError) {
+      const authError = new Error(error.message) as AppError;
+      authError.statusCode = error.statusCode;
+      authError.isOperational = true;
+      authError.name = 'Unauthorized';
+      return next(authError);
+    }
+
+    const genericError = new Error('Invalid or expired token') as AppError;
+    genericError.statusCode = 401;
+    genericError.isOperational = true;
+    next(genericError);
   }
 };

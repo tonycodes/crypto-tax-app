@@ -61,7 +61,7 @@ async function testRealWallet() {
         console.log(JSON.stringify(transactions[0], null, 2));
 
         console.log('\nParsing first transaction...');
-        const parsed = await adapter.parseTransaction(transactions[0]);
+        const parsed = await adapter.parseTransaction(transactions[0]!);
         console.log('Parsed transaction:');
         console.log(JSON.stringify(parsed, null, 2));
       } else {

@@ -106,7 +106,7 @@ describe.skip('EthereumAdapter - Real Blockchain Integration', () => {
         expect(['success', 'failed', 'pending']).toContain(tx?.status);
 
         // Parse the transaction
-        const parsed = await adapter.parseTransaction(tx);
+        const parsed = await adapter.parseTransaction(tx!);
         console.log('Parsed Transaction:', JSON.stringify(parsed, null, 2));
 
         expect(parsed).toHaveProperty('chain', ChainType.ETHEREUM);
@@ -190,7 +190,7 @@ describe('EthereumAdapter - Real Data Inspection', () => {
         console.log(JSON.stringify(transactions[0], null, 2));
 
         // Parse the transaction
-        const parsed = await adapter.parseTransaction(transactions[0]);
+        const parsed = await adapter.parseTransaction(transactions[0]!);
         console.log('\nParsed transaction:');
         console.log(JSON.stringify(parsed, null, 2));
       }

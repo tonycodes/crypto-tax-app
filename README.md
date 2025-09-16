@@ -5,6 +5,7 @@ A minimal viable crypto tax application focused on precise gain/loss calculation
 ## 🎯 Project Overview
 
 This application provides:
+
 - **Precise gain/loss calculations** with full cost basis analysis
 - **AI-powered transaction healing** for incomplete or ambiguous data
 - **Multi-blockchain support** (Ethereum, Solana, Bitcoin, Sui)
@@ -15,15 +16,17 @@ This application provides:
 ## 🏗️ Architecture
 
 ### Tech Stack
+
 - **Frontend**: React 18+ with Vite, Tailwind CSS 3+
 - **Backend**: Node.js/Express.js with WebSockets
-- **Database**: PostgreSQL with Prisma ORM
+- **Database**: MySQL 8+ with Prisma ORM
 - **Queue System**: BullMQ/Redis for async processing
 - **Authentication**: JWT-based with bcrypt
 - **AI Integration**: OpenAI GPT-4o with MCP (Model Context Protocol)
 - **Testing**: Jest/Vitest, Cypress, React Testing Library
 
 ### Blockchain SDKs
+
 - **Ethereum**: Ethers.js v6+
 - **Solana**: @solana/web3.js, @jup-ag/instruction-parser, @raydium-io/raydium-sdk
 - **Bitcoin**: bitcoinjs-lib v6+ with external APIs
@@ -32,24 +35,28 @@ This application provides:
 ## 📋 Key Features
 
 ### 1. Cost Basis Calculation
+
 - FIFO/LIFO methodologies
 - Support for complex DeFi transactions
 - Accurate handling of swaps, LP tokens, airdrops
 - Tax-year compliant reporting
 
 ### 2. AI-Powered Transaction Healing
+
 - Interactive workflow for incomplete transactions
 - Multi-source price consensus (CoinGecko, CoinMarketCap, etc.)
 - Confidence scoring for AI suggestions
 - User approval required for all changes
 
 ### 3. Advanced Solana Integration
+
 - Jupiter aggregator swap parsing
 - Raydium AMM transaction decoding
 - Program ID-based transaction routing
 - Comprehensive DEX coverage
 
 ### 4. MCP Integration
+
 - Dynamic tool registration for AI services
 - Extensible blockchain adapter system
 - Real-time consensus from multiple data sources
@@ -58,9 +65,30 @@ This application provides:
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 - Node.js 20+
-- PostgreSQL 14+
+- MySQL 8+
 - Redis 6+
+
+> ✅ **Quick start with Docker**
+>
+> ```bash
+> # Start a local MySQL instance with the expected credentials
+> docker run --name crypto-tax-mysql \
+>   -e MYSQL_ROOT_PASSWORD=password \
+>   -p 3307:3306 \
+>   -d mysql:8
+>
+> # (optional) create dev/test databases
+> docker exec crypto-tax-mysql \
+>   mysql -uroot -ppassword \
+>   -e "CREATE DATABASE IF NOT EXISTS crypto_tax_dev; CREATE DATABASE IF NOT EXISTS crypto_tax_test;"
+>
+> # Create dedicated application user
+> docker exec crypto-tax-mysql \
+>   mysql -uroot -ppassword \
+>   -e "CREATE USER IF NOT EXISTS 'app'@'%' IDENTIFIED BY 'password'; GRANT ALL PRIVILEGES ON *.* TO 'app'@'%' WITH GRANT OPTION; FLUSH PRIVILEGES;"
+> ```
 
 ### Installation
 
@@ -114,6 +142,7 @@ crypto-tax-app/
 ## 🔒 Security & Compliance
 
 ### Security Measures
+
 - **No private keys stored** - Ever, anywhere
 - **Data encryption** at rest and in transit
 - **Input validation** on all endpoints
@@ -121,6 +150,7 @@ crypto-tax-app/
 - **Parameterized queries** to prevent SQL injection
 
 ### Compliance Features
+
 - **Tax disclaimers** throughout the application
 - **User data isolation** with strict access controls
 - **Audit trails** for all data modifications
@@ -129,11 +159,13 @@ crypto-tax-app/
 ## 💰 Subscription Model
 
 ### Pricing Tiers
+
 - **Basic** (Free): 1 blockchain, basic reports
 - **Pro** ($50/month equivalent): All blockchains, AI healing
 - **Enterprise** ($200/month equivalent): Custom features, priority support
 
 ### Payment Method
+
 - Direct cryptocurrency payments (SOL/BTC)
 - On-chain verification with automatic activation
 - No intermediaries or third-party payment processors
@@ -147,6 +179,7 @@ This project follows strict **Test-Driven Development (TDD)**:
 3. **Refactor**: Improve code while keeping tests green
 
 ### Quality Gates
+
 - **100% test coverage** required
 - **No security vulnerabilities** in dependencies
 - **Performance benchmarks** must be met
