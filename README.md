@@ -69,6 +69,7 @@ This application provides:
 - Node.js 20+
 - MySQL 8+
 - Redis 6+
+- Access to a Solana RPC provider (Helius recommended: `https://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY`)
 
 > ✅ **Quick start with Docker**
 >
