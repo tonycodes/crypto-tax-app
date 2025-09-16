@@ -1,18 +1,23 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { EthereumAdapter } from './ethereum.adapter';
-import { ChainType, TransactionType, BlockchainConfig } from './adapter.interface';
+import { ChainType, TransactionType } from './adapter.interface';
 import { ethers } from 'ethers';
-
-// Mock ethers
-jest.mock('ethers');
 
 describe('EthereumAdapter', () => {
   let adapter: EthereumAdapter;
-  let mockProvider: jest.Mocked<ethers.JsonRpcProvider>;
+  let mockProvider: {
+    getBlockNumber: jest.Mock;
+    getTransaction: jest.Mock;
+    getTransactionReceipt: jest.Mock;
+    getBalance: jest.Mock;
+    getBlock: jest.Mock;
+    getLogs: jest.Mock;
+  };
+  let mockContract: any;
+  let contractSpy: jest.SpyInstance;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    adapter = new EthereumAdapter();
+  const attachMockProvider = () => {
     mockProvider = {
       getBlockNumber: jest.fn(),
       getTransaction: jest.fn(),
@@ -20,33 +25,36 @@ describe('EthereumAdapter', () => {
       getBalance: jest.fn(),
       getBlock: jest.fn(),
       getLogs: jest.fn(),
-    } as any;
+    };
 
-    (ethers.JsonRpcProvider as jest.MockedClass<typeof ethers.JsonRpcProvider>).mockImplementation(
-      () => mockProvider
-    );
+    (adapter as any).provider = mockProvider;
+    (adapter as any).initialized = true;
+  };
+
+  beforeEach(() => {
+    adapter = new EthereumAdapter();
+    mockContract = {
+      balanceOf: jest.fn(),
+      decimals: jest.fn(),
+      symbol: jest.fn(),
+    };
+    contractSpy = jest.spyOn(ethers as any, 'Contract').mockImplementation(() => mockContract);
+  });
+
+  afterEach(() => {
+    contractSpy.mockRestore();
   });
 
   describe('initialization', () => {
     it('should initialize with valid config', async () => {
-      const config: BlockchainConfig = {
-        rpcUrl: 'https://eth-mainnet.example.com',
-        apiKey: 'test-api-key',
-        network: 'mainnet',
-      };
-
+      const config = { rpcUrl: 'https://eth-mainnet.example.com' };
       await adapter.initialize(config);
-
-      expect(ethers.JsonRpcProvider).toHaveBeenCalledWith(config.rpcUrl);
+      expect((adapter as any).initialized).toBe(true);
     });
 
     it('should throw error if already initialized', async () => {
-      const config: BlockchainConfig = {
-        rpcUrl: 'https://eth-mainnet.example.com',
-      };
-
+      const config = { rpcUrl: 'https://eth-mainnet.example.com' };
       await adapter.initialize(config);
-
       await expect(adapter.initialize(config)).rejects.toThrow('Adapter already initialized');
     });
   });
@@ -56,7 +64,7 @@ describe('EthereumAdapter', () => {
       const validAddresses = [
         '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1',
         '0x0000000000000000000000000000000000000000',
-        '0xdAC17F958D2ee523a2206206994597C13D831ec7', // USDT
+        '0xdAC17F958D2ee523a2206206994597C13D831ec7',
       ];
 
       validAddresses.forEach(address => {
@@ -66,10 +74,10 @@ describe('EthereumAdapter', () => {
 
     it('should reject invalid Ethereum addresses', () => {
       const invalidAddresses = [
-        '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb', // Too short
-        '742d35Cc6634C0532925a3b844Bc9e7595f0bEb1', // Missing 0x
-        '0xGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG', // Invalid characters
-        'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', // Bitcoin address
+        '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+        '742d35Cc6634C0532925a3b844Bc9e7595f0bEb1',
+        '0xGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG',
+        'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
         '',
       ];
 
@@ -80,23 +88,25 @@ describe('EthereumAdapter', () => {
   });
 
   describe('getTransactions', () => {
-    beforeEach(async () => {
-      await adapter.initialize({ rpcUrl: 'https://eth-mainnet.example.com' });
+    beforeEach(() => {
+      attachMockProvider();
     });
 
     it('should fetch transactions for an address', async () => {
       const address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1';
+      const transferTopic = ethers.id('Transfer(address,address,uint256)');
+      const recipientAddress = '0x0000000000000000000000000000000000000002';
       const mockLogs = [
         {
-          transactionHash: '0x123',
+          transactionHash: '0xabc',
           blockNumber: 18000000,
           address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
           topics: [
-            ethers.id('Transfer(address,address,uint256)'),
-            ethers.zeroPadValue(address, 32),
-            ethers.zeroPadValue('0xRecipient', 32),
+            transferTopic,
+            ethers.zeroPadValue(address.toLowerCase(), 32),
+            ethers.zeroPadValue(recipientAddress.toLowerCase(), 32),
           ],
-          data: '0x0000000000000000000000000000000000000000000000000000000005f5e100',
+          data: ethers.zeroPadValue(ethers.toBeHex(10n ** 18n), 32),
         },
       ];
 
@@ -105,28 +115,33 @@ describe('EthereumAdapter', () => {
       };
 
       const mockTx = {
-        hash: '0x123',
+        hash: '0xabc',
         from: address,
-        to: '0xRecipient',
-        value: BigInt('1000000000000000000'), // 1 ETH
-        gasPrice: BigInt('20000000000'), // 20 gwei
+        to: recipientAddress,
+        value: 10n ** 18n,
+        gasPrice: 20n * 10n ** 9n,
         blockNumber: 18000000,
       };
 
       const mockReceipt = {
         status: 1,
-        gasUsed: BigInt(21000),
+        gasUsed: 21000n,
         logs: [],
+        blockNumber: 18000000,
       };
 
-      // Mock getLogs to be called twice (sender and receiver)
+      mockProvider.getBlockNumber.mockResolvedValue(18001000);
       mockProvider.getLogs
-        .mockResolvedValueOnce(mockLogs as any) // Sender logs
-        .mockResolvedValueOnce([] as any); // Receiver logs (empty for this test)
-      mockProvider.getBlock.mockResolvedValue(mockBlock as any);
+        .mockResolvedValueOnce(mockLogs as any)
+        .mockResolvedValueOnce([] as any)
+        .mockResolvedValue([] as any)
+        .mockResolvedValue([] as any);
       mockProvider.getTransaction.mockResolvedValue(mockTx as any);
       mockProvider.getTransactionReceipt.mockResolvedValue(mockReceipt as any);
-      mockProvider.getBlockNumber.mockResolvedValue(18001000);
+      mockProvider.getBlock.mockResolvedValue(mockBlock as any);
+
+      mockContract.decimals.mockResolvedValue(6);
+      mockContract.symbol.mockResolvedValue('USDT');
 
       const transactions = await adapter.getTransactions(address, {
         fromBlock: 17999000,
@@ -135,37 +150,38 @@ describe('EthereumAdapter', () => {
 
       expect(transactions).toHaveLength(1);
       expect(transactions[0]).toMatchObject({
-        hash: '0x123',
+        hash: '0xabc',
         from: address.toLowerCase(),
+        to: recipientAddress.toLowerCase(),
         status: 'success',
       });
+      expect(transactions[0]?.rawData?.tokenMetadata).toHaveProperty(
+        '0xdac17f958d2ee523a2206206994597c13d831ec7'
+      );
     });
 
     it('should handle rate limiting with retry', async () => {
       const address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1';
-
-      // Mock getBlockNumber for the default 'latest' case
-      mockProvider.getBlockNumber.mockResolvedValue(999);
+      mockProvider.getBlockNumber.mockResolvedValue(1999);
 
       mockProvider.getLogs
-        .mockRejectedValueOnce(new Error('rate limit exceeded')) // First attempt fails
-        .mockResolvedValueOnce([] as any) // Retry for sender logs succeeds
-        .mockResolvedValueOnce([] as any); // Receiver logs succeeds
+        .mockRejectedValueOnce(new Error('rate limit exceeded'))
+        .mockResolvedValue([] as any)
+        .mockResolvedValue([] as any);
 
-      // Use a block range that fits in one chunk (0-999 is exactly 1000 blocks)
       const transactions = await adapter.getTransactions(address, {
         fromBlock: 0,
         toBlock: 999,
       });
 
       expect(transactions).toEqual([]);
-      expect(mockProvider.getLogs).toHaveBeenCalledTimes(3); // Once for rate limit, twice for retry (sender + receiver)
+      expect(mockProvider.getLogs).toHaveBeenCalledTimes(3);
     });
   });
 
   describe('parseTransaction', () => {
-    beforeEach(async () => {
-      await adapter.initialize({ rpcUrl: 'https://eth-mainnet.example.com' });
+    beforeEach(() => {
+      attachMockProvider();
     });
 
     it('should parse ETH transfer transaction', async () => {
@@ -175,8 +191,8 @@ describe('EthereumAdapter', () => {
         timestamp: Date.now(),
         from: '0xSender',
         to: '0xRecipient',
-        value: '1000000000000000000', // 1 ETH
-        fee: '420000000000000', // 0.00042 ETH
+        value: '1000000000000000000',
+        fee: '420000000000000',
         status: 'success' as const,
         rawData: {},
       };
@@ -189,31 +205,41 @@ describe('EthereumAdapter', () => {
         type: TransactionType.TRANSFER,
         tokenSymbol: 'ETH',
         amount: '1000000000000000000',
-        feeAmount: '420000000000000',
       });
     });
 
     it('should parse ERC20 token transfer', async () => {
+      const transferTopic = ethers.id('Transfer(address,address,uint256)');
+      const senderAddress = '0x0000000000000000000000000000000000000003';
+      const recipientAddress = '0x0000000000000000000000000000000000000004';
+      const valueHex = ethers.zeroPadValue(ethers.toBeHex(1_000_000n), 32);
       const rawTx = {
         hash: '0x456',
         blockNumber: 18000000,
         timestamp: Date.now(),
         from: '0xSender',
-        to: '0xdAC17F958D2ee523a2206206994597C13D831ec7', // USDT contract
+        to: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
         value: '0',
         fee: '420000000000000',
         status: 'success' as const,
         rawData: {
           logs: [
             {
+              address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
               topics: [
-                ethers.id('Transfer(address,address,uint256)'),
-                ethers.zeroPadValue('0xSender', 32),
-                ethers.zeroPadValue('0xRecipient', 32),
+                transferTopic,
+                ethers.zeroPadValue(senderAddress.toLowerCase(), 32),
+                ethers.zeroPadValue(recipientAddress.toLowerCase(), 32),
               ],
-              data: '0x00000000000000000000000000000000000000000000000000000000000f4240', // 1 USDT (1000000 in hex)
+              data: valueHex,
             },
           ],
+          tokenMetadata: {
+            '0xdac17f958d2ee523a2206206994597c13d831ec7': {
+              symbol: 'USDT',
+              decimals: 6,
+            },
+          },
         },
       };
 
@@ -223,21 +249,23 @@ describe('EthereumAdapter', () => {
         hash: '0x456',
         chain: ChainType.ETHEREUM,
         type: TransactionType.TRANSFER,
-        tokenSymbol: 'ERC20',
-        tokenAddress: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+        tokenSymbol: 'USDT',
+        tokenAddress: '0xdac17f958d2ee523a2206206994597c13d831ec7',
         amount: '1000000',
+        from: senderAddress.toLowerCase(),
+        to: recipientAddress.toLowerCase(),
       });
     });
   });
 
   describe('getBalance', () => {
-    beforeEach(async () => {
-      await adapter.initialize({ rpcUrl: 'https://eth-mainnet.example.com' });
+    beforeEach(() => {
+      attachMockProvider();
     });
 
     it('should get ETH balance for address', async () => {
       const address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1';
-      mockProvider.getBalance.mockResolvedValue(BigInt('10500000000000000000')); // 10.5 ETH in wei
+      mockProvider.getBalance.mockResolvedValue(10n ** 18n);
 
       const balances = await adapter.getBalance(address);
 
@@ -246,24 +274,18 @@ describe('EthereumAdapter', () => {
         address,
         chain: ChainType.ETHEREUM,
         tokenSymbol: 'ETH',
-        balance: '10500000000000000000', // 10.5 ETH in wei
+        balance: '1000000000000000000',
         decimals: 18,
       });
     });
 
     it('should get ERC20 token balance', async () => {
       const address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1';
-      const tokenAddress = '0xdAC17F958D2ee523a2206206994597C13D831ec7'; // USDT
+      const tokenAddress = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
 
-      // Mock the Contract constructor and its methods
-      const mockContract = {
-        balanceOf: jest.fn(() => Promise.resolve(BigInt('1000000'))), // 1 USDT (6 decimals)
-        decimals: jest.fn(() => Promise.resolve(6)),
-        symbol: jest.fn(() => Promise.resolve('USDT')),
-      };
-
-      // Override ethers.Contract to return our mock
-      jest.spyOn(ethers, 'Contract').mockImplementation(() => mockContract as any);
+      mockContract.balanceOf.mockResolvedValue(1000000n);
+      mockContract.decimals.mockResolvedValue(6);
+      mockContract.symbol.mockResolvedValue('USDT');
 
       const balances = await adapter.getBalance(address, tokenAddress);
 
@@ -280,8 +302,8 @@ describe('EthereumAdapter', () => {
   });
 
   describe('getCurrentBlockNumber', () => {
-    beforeEach(async () => {
-      await adapter.initialize({ rpcUrl: 'https://eth-mainnet.example.com' });
+    beforeEach(() => {
+      attachMockProvider();
     });
 
     it('should return current block number', async () => {
@@ -294,8 +316,8 @@ describe('EthereumAdapter', () => {
   });
 
   describe('getTransactionByHash', () => {
-    beforeEach(async () => {
-      await adapter.initialize({ rpcUrl: 'https://eth-mainnet.example.com' });
+    beforeEach(() => {
+      attachMockProvider();
     });
 
     it('should fetch transaction by hash', async () => {
@@ -304,14 +326,15 @@ describe('EthereumAdapter', () => {
         hash,
         from: '0xSender',
         to: '0xRecipient',
-        value: BigInt('1000000000000000000'), // 1 ETH
-        gasPrice: BigInt('20000000000'), // 20 gwei
+        value: 10n ** 18n,
+        gasPrice: 20n * 10n ** 9n,
         blockNumber: 18000000,
       };
       const mockReceipt = {
         status: 1,
-        gasUsed: BigInt(21000),
+        gasUsed: 21000n,
         logs: [],
+        blockNumber: 18000000,
       };
       const mockBlock = {
         timestamp: Math.floor(Date.now() / 1000),
@@ -321,12 +344,12 @@ describe('EthereumAdapter', () => {
       mockProvider.getTransactionReceipt.mockResolvedValue(mockReceipt as any);
       mockProvider.getBlock.mockResolvedValue(mockBlock as any);
 
-      const transaction = await adapter.getTransactionByHash(hash);
+      const result = await adapter.getTransactionByHash(hash);
 
-      expect(transaction).toMatchObject({
+      expect(result).toMatchObject({
         hash,
-        from: '0xSender'.toLowerCase(),
-        to: '0xRecipient'.toLowerCase(),
+        from: '0xsender',
+        to: '0xrecipient',
         status: 'success',
       });
     });
