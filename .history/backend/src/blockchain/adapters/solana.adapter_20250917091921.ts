@@ -13,7 +13,6 @@ import {
   NetworkError,
   RateLimitError,
 } from './adapter.interface';
-import { priceService } from '../../pricing/price.service';
 
 const RAYDIUM_PROGRAM_IDS = new Set([
   '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Nd',
@@ -242,30 +241,6 @@ export class SolanaAdapter implements IBlockchainAdapter {
           tokenChange,
         };
       }
-    }
-
-    // Fetch historical price for the transaction timestamp
-    try {
-      const priceData = await priceService.getHistoricalPrice(
-        parsed.tokenSymbol,
-        rawTx.timestamp,
-        this.chain
-      );
-
-      if (priceData) {
-        parsed.priceUSD = priceData.price;
-        parsed.metadata = {
-          ...parsed.metadata,
-          priceData: {
-            price: priceData.price,
-            timestamp: priceData.timestamp,
-            source: priceData.source,
-          },
-        };
-      }
-    } catch (error) {
-      // Price fetching is not critical - log and continue
-      console.warn(`Failed to fetch price for ${parsed.tokenSymbol} at ${rawTx.timestamp}:`, error);
     }
 
     return parsed;

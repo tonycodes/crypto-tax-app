@@ -13,7 +13,6 @@ import {
   NetworkError,
   RateLimitError,
 } from './adapter.interface';
-import { priceService } from '../../pricing/price.service';
 
 const RAYDIUM_PROGRAM_IDS = new Set([
   '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Nd',
@@ -31,14 +30,12 @@ export class SolanaAdapter implements IBlockchainAdapter {
   readonly chain = ChainType.SOLANA;
   private connection?: web3.Connection;
   private initialized = false;
-  private config?: BlockchainConfig;
 
   async initialize(config: BlockchainConfig): Promise<void> {
     if (this.initialized) {
       throw new Error('Adapter already initialized');
     }
 
-    this.config = config;
     this.connection = new web3.Connection(config.rpcUrl, {
       commitment: 'confirmed',
       confirmTransactionInitialTimeout: config.rateLimitMs ?? 60_000,
@@ -97,11 +94,6 @@ export class SolanaAdapter implements IBlockchainAdapter {
       });
 
       for (const signatureInfo of signatures) {
-        // Add rate limiting between requests
-        if (this.config?.rateLimitMs && this.config.rateLimitMs > 0) {
-          await sleep(this.config.rateLimitMs);
-        }
-
         try {
           const parsedTx = await connection.getParsedTransaction(signatureInfo.signature, {
             maxSupportedTransactionVersion: 0,
@@ -168,17 +160,13 @@ export class SolanaAdapter implements IBlockchainAdapter {
   }
 
   async parseTransaction(rawTx: RawTransaction): Promise<ParsedTransaction> {
-    // Convert lamports to SOL (1 SOL = 1e9 lamports)
-    const lamports = rawTx.value ? BigInt(rawTx.value) : 0n;
-    const solAmount = Number(lamports) / 1e9;
-
     const parsed: ParsedTransaction = {
       hash: rawTx.hash,
       chain: this.chain,
       type: TransactionType.TRANSFER,
       from: rawTx.from,
       tokenSymbol: 'SOL',
-      amount: solAmount.toString(),
+      amount: rawTx.value ?? '0',
       timestamp: new Date(rawTx.timestamp),
       status: rawTx.status,
       metadata: rawTx.rawData ?? {},
@@ -244,30 +232,6 @@ export class SolanaAdapter implements IBlockchainAdapter {
       }
     }
 
-    // Fetch historical price for the transaction timestamp
-    try {
-      const priceData = await priceService.getHistoricalPrice(
-        parsed.tokenSymbol,
-        rawTx.timestamp,
-        this.chain
-      );
-
-      if (priceData) {
-        parsed.priceUSD = priceData.price;
-        parsed.metadata = {
-          ...parsed.metadata,
-          priceData: {
-            price: priceData.price,
-            timestamp: priceData.timestamp,
-            source: priceData.source,
-          },
-        };
-      }
-    } catch (error) {
-      // Price fetching is not critical - log and continue
-      console.warn(`Failed to fetch price for ${parsed.tokenSymbol} at ${rawTx.timestamp}:`, error);
-    }
-
     return parsed;
   }
 
@@ -312,20 +276,11 @@ export class SolanaAdapter implements IBlockchainAdapter {
         decimals = tokenAmount.decimals ?? decimals;
       }
 
-      // Try to resolve token symbol from known tokens
-      let tokenSymbol = 'SPL';
-      if (tokenAddress === 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v') {
-        tokenSymbol = 'USDC';
-      } else if (tokenAddress === 'So11111111111111111111111111111111111111112') {
-        tokenSymbol = 'SOL';
-      }
-      // TODO: Add more token symbol mappings or fetch from metadata
-
       return [
         {
           address,
           chain: this.chain,
-          tokenSymbol,
+          tokenSymbol: 'SPL',
           tokenAddress,
           balance: total.toString(),
           decimals,
@@ -454,9 +409,8 @@ export class SolanaAdapter implements IBlockchainAdapter {
       return null;
     }
 
-    // Return signed difference: positive for incoming SOL, negative for outgoing
     const diff = BigInt(post) - BigInt(pre);
-    return diff;
+    return diff < 0n ? -diff : diff;
   }
 
   private computeSplTokenDelta(meta: web3.ConfirmedTransactionMeta, ownerAddress: string) {

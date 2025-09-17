@@ -13,7 +13,6 @@ import {
   NetworkError,
   RateLimitError,
 } from './adapter.interface';
-import { priceService } from '../../pricing/price.service';
 
 const RAYDIUM_PROGRAM_IDS = new Set([
   '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Nd',
@@ -168,17 +167,13 @@ export class SolanaAdapter implements IBlockchainAdapter {
   }
 
   async parseTransaction(rawTx: RawTransaction): Promise<ParsedTransaction> {
-    // Convert lamports to SOL (1 SOL = 1e9 lamports)
-    const lamports = rawTx.value ? BigInt(rawTx.value) : 0n;
-    const solAmount = Number(lamports) / 1e9;
-
     const parsed: ParsedTransaction = {
       hash: rawTx.hash,
       chain: this.chain,
       type: TransactionType.TRANSFER,
       from: rawTx.from,
       tokenSymbol: 'SOL',
-      amount: solAmount.toString(),
+      amount: rawTx.value ?? '0',
       timestamp: new Date(rawTx.timestamp),
       status: rawTx.status,
       metadata: rawTx.rawData ?? {},
@@ -242,30 +237,6 @@ export class SolanaAdapter implements IBlockchainAdapter {
           tokenChange,
         };
       }
-    }
-
-    // Fetch historical price for the transaction timestamp
-    try {
-      const priceData = await priceService.getHistoricalPrice(
-        parsed.tokenSymbol,
-        rawTx.timestamp,
-        this.chain
-      );
-
-      if (priceData) {
-        parsed.priceUSD = priceData.price;
-        parsed.metadata = {
-          ...parsed.metadata,
-          priceData: {
-            price: priceData.price,
-            timestamp: priceData.timestamp,
-            source: priceData.source,
-          },
-        };
-      }
-    } catch (error) {
-      // Price fetching is not critical - log and continue
-      console.warn(`Failed to fetch price for ${parsed.tokenSymbol} at ${rawTx.timestamp}:`, error);
     }
 
     return parsed;
@@ -454,9 +425,8 @@ export class SolanaAdapter implements IBlockchainAdapter {
       return null;
     }
 
-    // Return signed difference: positive for incoming SOL, negative for outgoing
     const diff = BigInt(post) - BigInt(pre);
-    return diff;
+    return diff < 0n ? -diff : diff;
   }
 
   private computeSplTokenDelta(meta: web3.ConfirmedTransactionMeta, ownerAddress: string) {
