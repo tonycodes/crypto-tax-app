@@ -11,7 +11,7 @@ async function testEthereumConnector(walletAddress: string) {
 
   try {
     await adapter.initialize({
-      rpcUrl: process.env['ETHEREUM_RPC_URL'] || 'https://eth.llamarpc.com',
+      rpcUrl: 'https://eth.llamarpc.com',
       network: 'mainnet',
     });
 
@@ -63,13 +63,9 @@ async function testSolanaConnector(walletAddress: string) {
   const adapter = new SolanaAdapter();
 
   try {
-    // Use Helius RPC for better rate limits and reliability
     await adapter.initialize({
-      rpcUrl:
-        process.env['SOLANA_RPC_URL'] ||
-        'https://mainnet.helius-rpc.com/?api-key=31af627a-a77d-4442-bfda-d879582dcd80',
+      rpcUrl: 'https://api.mainnet-beta.solana.com',
       network: 'mainnet',
-      rateLimitMs: 100, // Add rate limiting
     });
 
     // Test SOL balance
@@ -118,7 +114,7 @@ async function testBitcoinConnector(walletAddress: string) {
 
   try {
     await adapter.initialize({
-      rpcUrl: process.env['BITCOIN_RPC_URL'] || 'https://api.blockcypher.com/v1/btc/main',
+      rpcUrl: 'https://api.blockcypher.com/v1/btc/main',
       network: 'mainnet',
     });
 
@@ -161,22 +157,14 @@ async function runAllConnectorTests(ethWallet: string, solWallet: string, btcWal
   console.log('================================');
 }
 
-// Example wallets for testing (verified to have balances/transactions)
-// ETH: 0x44894aeEe56c2dd589c1D5C8cb04B87576967F97 (has ~2.389 ETH)
-// SOL: HiKmEQrzTd6J3HBjLg2U8qe54ZPsJXL7XAFyRhvpMchx (has ~1.197 SOL)
-// BTC: 34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo (has ~0.248 BTC)
-
 // Check command line arguments
 const [, , ethWallet, solWallet, btcWallet] = process.argv;
 
 if (!ethWallet || !solWallet || !btcWallet) {
   console.log('Usage: npx tsx test-live-connectors.ts <eth_wallet> <sol_wallet> <btc_wallet>');
-  console.log('\nExample with verified test wallets:');
+  console.log('\nExample:');
   console.log(
-    'npx tsx test-live-connectors.ts 0x44894aeEe56c2dd589c1D5C8cb04B87576967F97 HiKmEQrzTd6J3HBjLg2U8qe54ZPsJXL7XAFyRhvpMchx 34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo'
-  );
-  console.log(
-    '\nNote: These example wallets contain real funds and transaction history for testing.'
+    'npx tsx test-live-connectors.ts 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1 8qJSyQprMC57TWKaYEmetUR3UUiTP2M3hXdcvFhkZdmv 1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2'
   );
   process.exit(1);
 }

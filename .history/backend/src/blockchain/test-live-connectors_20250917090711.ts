@@ -11,7 +11,7 @@ async function testEthereumConnector(walletAddress: string) {
 
   try {
     await adapter.initialize({
-      rpcUrl: process.env['ETHEREUM_RPC_URL'] || 'https://eth.llamarpc.com',
+      rpcUrl: process.env.ETHEREUM_RPC_URL || 'https://eth.llamarpc.com',
       network: 'mainnet',
     });
 
@@ -65,9 +65,7 @@ async function testSolanaConnector(walletAddress: string) {
   try {
     // Use Helius RPC for better rate limits and reliability
     await adapter.initialize({
-      rpcUrl:
-        process.env['SOLANA_RPC_URL'] ||
-        'https://mainnet.helius-rpc.com/?api-key=31af627a-a77d-4442-bfda-d879582dcd80',
+      rpcUrl: 'https://mainnet.helius-rpc.com/?api-key=demo', // Replace with actual API key in production
       network: 'mainnet',
       rateLimitMs: 100, // Add rate limiting
     });
@@ -118,7 +116,7 @@ async function testBitcoinConnector(walletAddress: string) {
 
   try {
     await adapter.initialize({
-      rpcUrl: process.env['BITCOIN_RPC_URL'] || 'https://api.blockcypher.com/v1/btc/main',
+      rpcUrl: 'https://api.blockcypher.com/v1/btc/main',
       network: 'mainnet',
     });
 

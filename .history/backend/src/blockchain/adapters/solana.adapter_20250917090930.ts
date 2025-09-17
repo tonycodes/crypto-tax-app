@@ -167,17 +167,13 @@ export class SolanaAdapter implements IBlockchainAdapter {
   }
 
   async parseTransaction(rawTx: RawTransaction): Promise<ParsedTransaction> {
-    // Convert lamports to SOL (1 SOL = 1e9 lamports)
-    const lamports = rawTx.value ? BigInt(rawTx.value) : 0n;
-    const solAmount = Number(lamports) / 1e9;
-
     const parsed: ParsedTransaction = {
       hash: rawTx.hash,
       chain: this.chain,
       type: TransactionType.TRANSFER,
       from: rawTx.from,
       tokenSymbol: 'SOL',
-      amount: solAmount.toString(),
+      amount: rawTx.value ?? '0',
       timestamp: new Date(rawTx.timestamp),
       status: rawTx.status,
       metadata: rawTx.rawData ?? {},
@@ -429,9 +425,8 @@ export class SolanaAdapter implements IBlockchainAdapter {
       return null;
     }
 
-    // Return signed difference: positive for incoming SOL, negative for outgoing
     const diff = BigInt(post) - BigInt(pre);
-    return diff;
+    return diff < 0n ? -diff : diff;
   }
 
   private computeSplTokenDelta(meta: web3.ConfirmedTransactionMeta, ownerAddress: string) {
